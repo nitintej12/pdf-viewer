@@ -451,13 +451,89 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4);
         }
+
+        /* Upload Section Styles */
+        .upload-section {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 40px 20px;
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: #4f46e5;
+            background: rgba(79, 70, 229, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone.dragover {
+            border-color: #7c3aed;
+            background: rgba(124, 58, 237, 0.2);
+            transform: scale(1.02);
+        }
+
+        .upload-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            opacity: 0.7;
+        }
+
+        .upload-text strong {
+            font-size: 1.1rem;
+            color: #ffffff;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .upload-text p {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .btn-upload {
+            background: linear-gradient(135deg, #059669, #047857);
+            color: white;
+            min-width: 180px;
+        }
+
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(5, 150, 105, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .upload-zone {
+                padding: 30px 15px;
+            }
+            
+            .upload-text strong {
+                font-size: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header class="header">
             <h1 class="title">PDF Viewer</h1>
-            <p class="subtitle">View Google Drive PDFs instantly in your browser</p>
+            <p class="subtitle">📺 TV-Friendly PDF Viewer - Works with phone uploads & cloud links</p>
         </header>
 
         <div class="input-section">
@@ -466,11 +542,26 @@
                     type="text" 
                     id="pdfUrl" 
                     class="url-input" 
-                    placeholder="Paste your Google Drive PDF link here (https://drive.google.com/file/d/.../view)"
+                    placeholder="📱→📺 Paste OneDrive/Dropbox link from phone or upload file directly"
                     autocomplete="off"
                 >
-                <button id="loadBtn" class="btn btn-primary">Load PDF</button>
+                <button id="loadBtn" class="btn btn-primary">Load URL</button>
                 <button id="clearBtn" class="btn btn-secondary">Clear</button>
+            </div>
+            
+            <!-- File Upload Section -->
+            <div class="upload-section">
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+                    <div class="upload-content">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">
+                            <strong>Drop PDF file here or click to browse</strong>
+                            <p>📺 Works 100% on TV browsers | 📱 Can't upload directly from phone? Use OneDrive/Dropbox instead!</p>
+                        </div>
+                    </div>
+                </div>
+                <button id="uploadBtn" class="btn btn-upload">📁 Choose PDF File</button>
             </div>
         </div>
 
@@ -545,6 +636,9 @@
                     urlInput: document.getElementById('pdfUrl'),
                     loadBtn: document.getElementById('loadBtn'),
                     clearBtn: document.getElementById('clearBtn'),
+                    uploadBtn: document.getElementById('uploadBtn'),
+                    fileInput: document.getElementById('fileInput'),
+                    uploadZone: document.getElementById('uploadZone'),
                     prevBtn: document.getElementById('prevBtn'),
                     nextBtn: document.getElementById('nextBtn'),
                     zoomInBtn: document.getElementById('zoomInBtn'),
@@ -563,11 +657,33 @@
             bindEvents() {
                 this.elements.loadBtn.addEventListener('click', () => this.loadPDF());
                 this.elements.clearBtn.addEventListener('click', () => this.clearViewer());
+                this.elements.uploadBtn.addEventListener('click', () => this.elements.fileInput.click());
+                this.elements.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
                 this.elements.prevBtn.addEventListener('click', () => this.previousPage());
                 this.elements.nextBtn.addEventListener('click', () => this.nextPage());
                 this.elements.zoomInBtn.addEventListener('click', () => this.zoomIn());
                 this.elements.zoomOutBtn.addEventListener('click', () => this.zoomOut());
                 this.elements.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+
+                // Drag and drop functionality
+                this.elements.uploadZone.addEventListener('click', () => this.elements.fileInput.click());
+                this.elements.uploadZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    this.elements.uploadZone.classList.add('dragover');
+                });
+                this.elements.uploadZone.addEventListener('dragleave', () => {
+                    this.elements.uploadZone.classList.remove('dragover');
+                });
+                this.elements.uploadZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    this.elements.uploadZone.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0 && files[0].type === 'application/pdf') {
+                        this.handleFileUpload({ target: { files } });
+                    } else {
+                        this.showMessage('Please drop a valid PDF file', 'error');
+                    }
+                });
                 
                 this.elements.urlInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
@@ -618,43 +734,108 @@
             }
 
             generateFallbackUrls(originalUrl) {
-                const match = originalUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-                if (!match) {
+                // Handle direct PDF URLs first
+                if (originalUrl.toLowerCase().endsWith('.pdf')) {
                     return [originalUrl];
                 }
                 
-                const fileId = match[1];
-                console.log(`Extracted file ID: ${fileId}`);
+                // Google Drive URLs
+                const gdMatch = originalUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+                if (gdMatch) {
+                    const fileId = gdMatch[1];
+                    return [
+                        `https://drive.google.com/file/d/${fileId}/preview`,
+                        `https://drive.google.com/uc?id=${fileId}&export=view`,
+                    ];
+                }
                 
-                // Comprehensive list of Google Drive URL formats
-                const directUrls = [
-                    // Standard formats
-                    `https://drive.google.com/file/d/${fileId}/preview`,
-                    `https://drive.google.com/uc?id=${fileId}&export=view`,
-                    `https://drive.google.com/file/d/${fileId}/view`,
-                    `https://drive.google.com/uc?export=download&id=${fileId}`,
+                // OneDrive URLs - much more TV-friendly
+                const oneDriveMatch = originalUrl.match(/1drv\.ms\/[a-zA-Z]\/([a-zA-Z0-9_-]+)/);
+                if (oneDriveMatch || originalUrl.includes('onedrive.live.com')) {
+                    // OneDrive embed format works better on TVs
+                    const embedUrl = originalUrl.replace('/view', '/embed').replace('?', '&').replace('&', '?');
+                    return [embedUrl, originalUrl];
+                }
+                
+                // Dropbox URLs
+                if (originalUrl.includes('dropbox.com')) {
+                    const directUrl = originalUrl.replace('?dl=0', '?dl=1').replace('&dl=0', '&dl=1');
+                    return [directUrl, originalUrl];
+                }
+                
+                // Box URLs
+                if (originalUrl.includes('box.com')) {
+                    return [originalUrl.replace('/s/', '/embed/s/')];
+                }
+                
+                // Default: try the URL as-is
+                return [originalUrl];
+            }
+
+            async handleFileUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                if (file.type !== 'application/pdf') {
+                    this.showMessage('Please select a PDF file', 'error');
+                    return;
+                }
+                
+                console.log(`Loading local PDF file: ${file.name} (${Math.round(file.size/1024)}KB)`);
+                this.showMessage(`📁 Loading local file: ${file.name}`, 'success');
+                
+                this.showLoading();
+                this.elements.loadBtn.disabled = true;
+                
+                try {
+                    // Read file as ArrayBuffer for PDF.js
+                    const arrayBuffer = await this.readFileAsArrayBuffer(file);
                     
-                    // Alternative formats for TV browsers
-                    `https://docs.google.com/document/d/${fileId}/export?format=pdf`,
-                    `https://drive.google.com/uc?id=${fileId}&export=download&format=pdf`,
-                ];
-                
-                // CORS proxy URLs as last resort
-                const corsProxies = [
-                    'https://api.allorigins.win/raw?url=',
-                    'https://cors-anywhere.herokuapp.com/',
-                    'https://thingproxy.freeboard.io/fetch/',
-                ];
-                
-                // Add CORS proxy versions
-                const proxyUrls = corsProxies.map(proxy => 
-                    `${proxy}${encodeURIComponent(`https://drive.google.com/file/d/${fileId}/preview`)}`
-                );
-                
-                const allUrls = [...directUrls, ...proxyUrls];
-                
-                console.log(`Generated ${allUrls.length} fallback URLs for ${this.isTV ? 'TV' : 'desktop'} browser`);
-                return allUrls;
+                    // Load PDF with PDF.js
+                    const loadingTask = pdfjsLib.getDocument({
+                        data: arrayBuffer,
+                        // TV-optimized settings
+                        maxImageSize: this.isTV ? 4096 * 4096 : -1,
+                        disableWorker: this.isTV,
+                        disableAutoFetch: this.isTV,
+                        disableStream: this.isTV
+                    });
+                    
+                    this.pdf = await loadingTask.promise;
+                    this.totalPages = this.pdf.numPages;
+                    this.currentPage = 1;
+                    
+                    this.hideLoading();
+                    this.elements.controls.classList.remove('hidden');
+                    
+                    await this.renderAllPages();
+                    this.updateControls();
+                    
+                    this.showMessage(`✅ ${file.name} loaded successfully! ${this.totalPages} pages - Going fullscreen...`, 'success');
+                    
+                    // Auto-fullscreen
+                    requestAnimationFrame(() => {
+                        this.enterFullscreen();
+                    });
+                    
+                } catch (error) {
+                    console.error('File upload error:', error);
+                    this.hideLoading();
+                    this.showMessage(`❌ Failed to load ${file.name}: ${error.message}`, 'error');
+                } finally {
+                    this.elements.loadBtn.disabled = false;
+                    // Clear file input
+                    this.elements.fileInput.value = '';
+                }
+            }
+
+            readFileAsArrayBuffer(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsArrayBuffer(file);
+                });
             }
 
             showMessage(text, type = 'info') {
@@ -690,9 +871,19 @@
                     return;
                 }
 
-                const googleDriveRegex = /^https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/view/;
-                if (!googleDriveRegex.test(url)) {
-                    this.showMessage('Please enter a valid Google Drive share link (https://drive.google.com/file/d/.../view)', 'error');
+                // Accept various cloud service URLs
+                const validUrlPatterns = [
+                    /https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+/,
+                    /https:\/\/.*onedrive\.live\.com/,
+                    /https:\/\/1drv\.ms/,
+                    /https:\/\/.*dropbox\.com/,
+                    /https:\/\/.*box\.com/,
+                    /.*\.pdf$/i
+                ];
+                
+                const isValidUrl = validUrlPatterns.some(pattern => pattern.test(url));
+                if (!isValidUrl) {
+                    this.showMessage('Please enter a valid PDF URL (OneDrive, Dropbox, Box.com, or direct PDF link work best on TV)', 'error');
                     return;
                 }
 
