@@ -533,7 +533,7 @@
     <div class="container">
         <header class="header">
             <h1 class="title">PDF Viewer</h1>
-            <p class="subtitle">📺 TV-Friendly PDF Viewer - Works with phone uploads & cloud links</p>
+            <p class="subtitle">📺 TV-Friendly PDF Viewer - Direct file upload works best!</p>
         </header>
 
         <div class="input-section">
@@ -542,7 +542,7 @@
                     type="text" 
                     id="pdfUrl" 
                     class="url-input" 
-                    placeholder="📱→📺 Paste OneDrive/Dropbox link from phone or upload file directly"
+                    placeholder="🔗 Paste any PDF URL (we'll try our CORS proxy) or upload file directly"
                     autocomplete="off"
                 >
                 <button id="loadBtn" class="btn btn-primary">Load URL</button>
@@ -557,7 +557,7 @@
                         <div class="upload-icon">📄</div>
                         <div class="upload-text">
                             <strong>Drop PDF file here or click to browse</strong>
-                            <p>📺 Works 100% on TV browsers | 📱 Can't upload directly from phone? Use OneDrive/Dropbox instead!</p>
+                            <p>📺 100% reliable on TV browsers | 🌐 URLs may have CORS issues, file upload always works!</p>
                         </div>
                     </div>
                 </div>
@@ -871,22 +871,6 @@
                     return;
                 }
 
-                // Accept various cloud service URLs
-                const validUrlPatterns = [
-                    /https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+/,
-                    /https:\/\/.*onedrive\.live\.com/,
-                    /https:\/\/1drv\.ms/,
-                    /https:\/\/.*dropbox\.com/,
-                    /https:\/\/.*box\.com/,
-                    /.*\.pdf$/i
-                ];
-                
-                const isValidUrl = validUrlPatterns.some(pattern => pattern.test(url));
-                if (!isValidUrl) {
-                    this.showMessage('Please enter a valid PDF URL (OneDrive, Dropbox, Box.com, or direct PDF link work best on TV)', 'error');
-                    return;
-                }
-
                 if (!retryFromError) {
                     this.retryCount = 0;
                 }
@@ -894,105 +878,72 @@
                 this.showLoading();
                 this.hideMessage();
                 this.elements.loadBtn.disabled = true;
-                this.elements.loadBtn.textContent = this.isTV ? 'Loading for TV...' : 'Loading...';
+                this.elements.loadBtn.textContent = 'Loading...';
 
                 try {
-                    const fallbackUrls = this.generateFallbackUrls(url);
-                    this.showMessage(`${this.isTV ? 'TV Browser' : 'Desktop Browser'} - Trying ${fallbackUrls.length} different formats...`, 'success');
-                    
-                    // Try each URL format with exponential backoff
-                    for (let i = 0; i < fallbackUrls.length; i++) {
-                        const currentUrl = fallbackUrls[i];
-                        const formatName = this.getFormatName(i);
-                        
-                        this.showMessage(`Attempt ${i + 1}/${fallbackUrls.length}: ${formatName}`, 'success');
-                        console.log(`Trying URL ${i + 1}: ${currentUrl}`);
-                        
-                        try {
-                            // TV browsers need longer timeouts
-                            const timeout = this.isTV ? 30000 : 15000;
-                            const loadingTask = pdfjsLib.getDocument({
-                                url: currentUrl,
-                                httpHeaders: this.isTV ? {
-                                    'User-Agent': navigator.userAgent,
-                                    'Cache-Control': 'no-cache'
-                                } : {},
-                                maxImageSize: this.isTV ? 4096 * 4096 : -1,
-                                disableWorker: this.isTV,
-                                disableAutoFetch: this.isTV,
-                                disableStream: this.isTV
-                            });
-                            
-                            // Add timeout for TV browsers
-                            const pdfPromise = Promise.race([
-                                loadingTask.promise,
-                                new Promise((_, reject) => 
-                                    setTimeout(() => reject(new Error('Timeout')), timeout)
-                                )
-                            ]);
-                            
-                            this.pdf = await pdfPromise;
-                            this.totalPages = this.pdf.numPages;
-                            this.currentPage = 1;
-                            
-                            console.log(`Success with URL format ${i + 1}: ${formatName}`);
-                            this.showMessage(`✅ Success with ${formatName}! Loading ${this.totalPages} pages...`, 'success');
-                            
-                            this.hideLoading();
-                            this.elements.controls.classList.remove('hidden');
-                            
-                            await this.renderAllPages();
-                            this.updateControls();
-                            
-                            this.showMessage(`PDF loaded successfully! ${this.totalPages} pages - Going fullscreen...`, 'success');
-                            
-                            // Auto-enter fullscreen immediately after PDF renders
-                            requestAnimationFrame(() => {
-                                this.enterFullscreen();
-                            });
-                            
-                            return;
-                            
-                        } catch (error) {
-                            console.error(`Failed with URL format ${i + 1} (${formatName}):`, error.message);
-                            
-                            // If it's the last URL and it failed, throw error
-                            if (i === fallbackUrls.length - 1) {
-                                throw new Error(`All ${fallbackUrls.length} formats failed. Last error: ${error.message}`);
-                            }
-                            
-                            // Exponential backoff - wait longer for TV browsers
-                            const baseDelay = this.isTV ? 2000 : 1000;
-                            const delay = Math.min(baseDelay * Math.pow(1.5, i), this.isTV ? 8000 : 5000);
-                            
-                            this.showMessage(`❌ ${formatName} failed. Waiting ${Math.round(delay/1000)}s before next attempt...`, 'error');
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
+                    // Method 1: Try direct PDF URL first
+                    if (url.toLowerCase().endsWith('.pdf')) {
+                        await this.loadDirectPDF(url);
+                        return;
                     }
+
+                    // Method 2: Use backend proxy for cloud URLs (CORS solution)
+                    this.showMessage('🔄 Using CORS proxy to load cloud PDF...', 'success');
+                    const proxyUrl = `/.netlify/functions/pdf-proxy?url=${encodeURIComponent(url)}`;
+                    await this.loadDirectPDF(proxyUrl);
+                    return;
                     
                 } catch (error) {
-                    console.error('All PDF loading methods failed:', error);
+                    console.error('PDF loading failed:', error);
                     this.hideLoading();
                     
-                    let errorMessage = `❌ Failed to load PDF after trying all ${this.isTV ? 'TV-optimized ' : ''}formats.\n\n`;
-                    
-                    if (this.isTV) {
-                        errorMessage += '📺 TV Browser Issues:\n';
-                        errorMessage += '• Samsung TV browsers have strict CORS policies\n';
-                        errorMessage += '• Network connectivity may be slower\n';
-                        errorMessage += '• Some Google Drive formats may be blocked\n\n';
-                    }
-                    
-                    errorMessage += '🔄 Trying iframe fallback viewer...';
-                    this.showMessage(errorMessage, 'error');
-                    
-                    // Final fallback: iframe viewer
+                    // Method 3: Final fallback - iframe viewer
+                    this.showMessage('❌ Proxy failed. Trying iframe viewer...', 'error');
                     setTimeout(() => this.tryIframeViewer(url), 1000);
                     
                 } finally {
                     this.elements.loadBtn.disabled = false;
-                    this.elements.loadBtn.textContent = 'Load PDF';
+                    this.elements.loadBtn.textContent = 'Load URL';
                 }
+            }
+
+            async loadDirectPDF(pdfUrl) {
+                console.log(`Loading PDF: ${pdfUrl}`);
+                
+                const loadingTask = pdfjsLib.getDocument({
+                    url: pdfUrl,
+                    // TV-optimized settings
+                    maxImageSize: this.isTV ? 4096 * 4096 : -1,
+                    disableWorker: this.isTV,
+                    disableAutoFetch: this.isTV,
+                    disableStream: this.isTV
+                });
+                
+                // Longer timeout for TV browsers
+                const timeout = this.isTV ? 30000 : 15000;
+                const pdfPromise = Promise.race([
+                    loadingTask.promise,
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Loading timeout')), timeout)
+                    )
+                ]);
+                
+                this.pdf = await pdfPromise;
+                this.totalPages = this.pdf.numPages;
+                this.currentPage = 1;
+                
+                this.hideLoading();
+                this.elements.controls.classList.remove('hidden');
+                
+                await this.renderAllPages();
+                this.updateControls();
+                
+                this.showMessage(`✅ PDF loaded successfully! ${this.totalPages} pages - Going fullscreen...`, 'success');
+                
+                // Auto-enter fullscreen
+                requestAnimationFrame(() => {
+                    this.enterFullscreen();
+                });
             }
 
             getFormatName(index) {
