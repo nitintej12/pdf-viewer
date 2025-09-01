@@ -683,12 +683,12 @@
                             await this.renderAllPages();
                             this.updateControls();
                             
-                            this.showMessage(`PDF loaded successfully! ${this.totalPages} pages (using format ${i + 1})`, 'success');
+                            this.showMessage(`PDF loaded successfully! ${this.totalPages} pages - Going fullscreen...`, 'success');
                             
-                            // Auto-enter fullscreen after PDF loads
-                            setTimeout(() => {
+                            // Auto-enter fullscreen immediately after PDF renders
+                            requestAnimationFrame(() => {
                                 this.enterFullscreen();
-                            }, 1000);
+                            });
                             
                             return;
                             
@@ -832,12 +832,12 @@
                     `;
                     
                     this.elements.viewerContainer.classList.remove('hidden');
-                    this.showMessage('Using fallback iframe viewer. Auto-entering fullscreen...', 'success');
+                    this.showMessage('Using fallback iframe viewer - Going fullscreen...', 'success');
                     
-                    // Auto-enter fullscreen for iframe viewer too
-                    setTimeout(() => {
+                    // Auto-enter fullscreen for iframe viewer too - immediately
+                    requestAnimationFrame(() => {
                         this.enterFullscreen();
-                    }, 1000);
+                    });
                     
                 } catch (error) {
                     console.error('Iframe fallback failed:', error);
@@ -854,7 +854,11 @@
             }
 
             enterFullscreen() {
+                console.log('Entering fullscreen mode...');
                 this.isFullscreen = true;
+                
+                // Immediately try browser fullscreen first
+                this.tryEnterBrowserFullscreen();
                 
                 // Create fullscreen container
                 const fullscreenContainer = document.createElement('div');
@@ -906,8 +910,11 @@
                 
                 document.body.appendChild(fullscreenContainer);
                 
-                // Hide original content
-                document.querySelector('.container').style.display = 'none';
+                // Hide original content immediately
+                const container = document.querySelector('.container');
+                if (container) {
+                    container.style.display = 'none';
+                }
                 
                 // Update button text (if still visible)
                 if (this.elements.fullscreenBtn) {
@@ -922,22 +929,33 @@
                 };
                 document.addEventListener('keydown', this.escKeyListener);
                 
-                // Try multiple methods for fullscreen (Tizen TV compatibility)
-                this.tryEnterBrowserFullscreen();
+                console.log('Fullscreen container created and displayed');
             }
 
             tryEnterBrowserFullscreen() {
                 const docEl = document.documentElement;
                 
+                console.log('Attempting browser fullscreen...');
+                
                 // Multiple fullscreen methods for better TV browser support
-                if (docEl.requestFullscreen) {
-                    docEl.requestFullscreen();
-                } else if (docEl.webkitRequestFullscreen) {
-                    docEl.webkitRequestFullscreen();
-                } else if (docEl.mozRequestFullScreen) {
-                    docEl.mozRequestFullScreen();
-                } else if (docEl.msRequestFullscreen) {
-                    docEl.msRequestFullscreen();
+                try {
+                    if (docEl.requestFullscreen) {
+                        console.log('Using requestFullscreen');
+                        docEl.requestFullscreen().catch(e => console.log('requestFullscreen failed:', e));
+                    } else if (docEl.webkitRequestFullscreen) {
+                        console.log('Using webkitRequestFullscreen');
+                        docEl.webkitRequestFullscreen();
+                    } else if (docEl.mozRequestFullScreen) {
+                        console.log('Using mozRequestFullScreen');
+                        docEl.mozRequestFullScreen();
+                    } else if (docEl.msRequestFullscreen) {
+                        console.log('Using msRequestFullscreen');
+                        docEl.msRequestFullscreen();
+                    } else {
+                        console.log('No fullscreen API available');
+                    }
+                } catch (error) {
+                    console.log('Fullscreen API error:', error);
                 }
             }
 
