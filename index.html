@@ -578,7 +578,7 @@
     <div class="container">
         <header class="header">
             <h1 class="title">PDF Viewer</h1>
-            <p class="subtitle">📺 TV-Friendly PDF Viewer - Direct file upload works best!</p>
+            <p class="subtitle">📺 Samsung TV: Paste URL and wait 3 seconds OR upload file directly</p>
         </header>
 
         <div class="input-section">
@@ -587,7 +587,7 @@
                     type="text" 
                     id="pdfUrl" 
                     class="url-input" 
-                    placeholder="🔗 Paste any PDF URL (we'll try our CORS proxy) or upload file directly"
+                    placeholder="📺 TV USERS: Paste URL here, then wait 3 seconds - auto-loads!"
                     autocomplete="off"
                 >
                 <button id="loadBtn" class="btn btn-primary">Load URL</button>
@@ -614,7 +614,7 @@
         
         <!-- TV Navigation Hint -->
         <div id="tvNavigationHint" class="tv-navigation-hint">
-            📺 Use arrow keys to navigate, Enter to select, Escape to exit fullscreen
+            📺 SAMSUNG TV: Buttons may not work - Paste URL and wait, or try double-clicking!
         </div>
 
         <div id="controls" class="controls hidden">
@@ -661,10 +661,18 @@
                 this.maxRetries = 6;
                 this.currentFocusIndex = 0;
                 this.focusableElements = [];
+                this.lastUrlValue = '';
+                this.urlCheckInterval = null;
+                this.autoLoadTimeout = null;
                 
                 this.initializeElements();
                 this.bindEvents();
                 this.setupTVNavigation();
+                
+                // Start auto-monitoring for TV browsers
+                if (this.isTV) {
+                    this.startTVAutoMonitoring();
+                }
                 
                 console.log(`Browser detected: ${this.isTV ? 'TV Browser' : 'Desktop Browser'}`);
             }
@@ -714,6 +722,11 @@
                 this.addMultipleEventListeners(this.elements.clearBtn, ['click', 'mousedown', 'touchstart'], () => this.clearViewer());
                 this.addMultipleEventListeners(this.elements.uploadBtn, ['click', 'mousedown', 'touchstart'], () => this.elements.fileInput.click());
                 this.elements.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+                
+                // TV Browser fallback - direct DOM monitoring
+                if (this.isTV) {
+                    this.setupTVFallbackEvents();
+                }
                 this.addMultipleEventListeners(this.elements.prevBtn, ['click', 'mousedown', 'touchstart'], () => this.previousPage());
                 this.addMultipleEventListeners(this.elements.nextBtn, ['click', 'mousedown', 'touchstart'], () => this.nextPage());
                 this.addMultipleEventListeners(this.elements.zoomInBtn, ['click', 'mousedown', 'touchstart'], () => this.zoomIn());
@@ -765,15 +778,93 @@
                 });
             }
 
+            setupTVFallbackEvents() {
+                console.log('📺 Setting up TV fallback button monitoring...');
+                
+                // Monitor button states and DOM changes
+                let buttonMonitorInterval = setInterval(() => {
+                    // Check if buttons are being interacted with (alternative detection)
+                    const loadBtn = this.elements.loadBtn;
+                    const uploadBtn = this.elements.uploadBtn;
+                    
+                    // If focused element changes or button appears "active", trigger action
+                    if (document.activeElement === loadBtn && this.elements.urlInput.value.trim()) {
+                        console.log('📺 TV: Load button detected as focused with URL');
+                        clearInterval(buttonMonitorInterval);
+                        setTimeout(() => this.loadPDF(), 100);
+                        buttonMonitorInterval = setInterval(() => {}, 1000); // Reset interval
+                    }
+                    
+                    if (document.activeElement === uploadBtn) {
+                        console.log('📺 TV: Upload button detected as focused');
+                        this.elements.fileInput.click();
+                    }
+                }, 200);
+                
+                // Also try onmouseenter/mouseover fallbacks
+                this.elements.loadBtn.onmouseenter = () => {
+                    console.log('📺 TV: Load button mouse enter detected');
+                    if (this.elements.urlInput.value.trim()) {
+                        setTimeout(() => this.loadPDF(), 500);
+                    }
+                };
+                
+                this.elements.uploadBtn.onmouseenter = () => {
+                    console.log('📺 TV: Upload button mouse enter detected');
+                    setTimeout(() => this.elements.fileInput.click(), 500);
+                };
+            }
+
+            startTVAutoMonitoring() {
+                console.log('🔄 Starting Samsung TV auto-monitoring system...');
+                this.showMessage('📺 TV Mode: Auto-monitoring enabled. Paste URL and wait!', 'success');
+                
+                // Monitor URL input field for changes
+                this.urlCheckInterval = setInterval(() => {
+                    const currentValue = this.elements.urlInput.value.trim();
+                    
+                    // If URL changed and is not empty
+                    if (currentValue !== this.lastUrlValue && currentValue.length > 10) {
+                        console.log(`📺 TV: URL detected: ${currentValue}`);
+                        this.lastUrlValue = currentValue;
+                        
+                        // Clear any existing timeout
+                        if (this.autoLoadTimeout) {
+                            clearTimeout(this.autoLoadTimeout);
+                        }
+                        
+                        // Show countdown
+                        let countdown = 3;
+                        this.showMessage(`📺 URL detected! Auto-loading in ${countdown} seconds...`, 'success');
+                        
+                        const countdownInterval = setInterval(() => {
+                            countdown--;
+                            if (countdown > 0) {
+                                this.showMessage(`📺 URL detected! Auto-loading in ${countdown} seconds...`, 'success');
+                            } else {
+                                clearInterval(countdownInterval);
+                                this.showMessage('🚀 Auto-loading PDF now...', 'success');
+                                this.loadPDF();
+                            }
+                        }, 1000);
+                        
+                        this.autoLoadTimeout = setTimeout(() => {
+                            clearInterval(countdownInterval);
+                        }, 3000);
+                    }
+                    this.lastUrlValue = currentValue;
+                }, 500); // Check every 500ms
+            }
+
             setupTVNavigation() {
                 if (this.isTV) {
                     console.log('Setting up TV navigation...');
                     this.elements.tvNavigationHint.classList.add('show');
                     
-                    // Auto-hide hint after 5 seconds
+                    // Show hint longer for TV users
                     setTimeout(() => {
                         this.elements.tvNavigationHint.classList.remove('show');
-                    }, 5000);
+                    }, 10000);
                     
                     this.updateFocusableElements();
                     this.focusCurrentElement();
