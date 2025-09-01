@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer - Google Drive PDF Reader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .title {
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            font-weight: 600;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #a0a0a0;
+            font-weight: 300;
+        }
+
+        .input-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            animation: fadeInUp 0.6s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .url-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .url-input:focus {
+            border-color: #4f46e5;
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .url-input::placeholder {
+            color: #888;
+        }
+
+        .btn {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover:before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            min-width: 120px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            animation: fadeIn 0.6s ease;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .page-info {
+            color: #a0a0a0;
+            font-size: 14px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .viewer-container {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            animation: fadeIn 0.8s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .pdf-container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .pdf-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .pdf-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .pdf-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .pdf-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 60px 20px;
+            color: #a0a0a0;
+            font-size: 16px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            text-align: center;
+            animation: shake 0.5s ease;
+        }
+
+        .success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #86efac;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .input-section {
+                padding: 20px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .url-input {
+                min-width: auto;
+            }
+
+            .controls {
+                justify-content: center;
+                gap: 10px;
+            }
+
+            .control-group {
+                padding: 6px 10px;
+            }
+
+            .pdf-container {
+                max-height: 70vh;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .subtitle {
+                font-size: 1rem;
+            }
+
+            .btn {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+
+            .control-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">PDF Viewer</h1>
+            <p class="subtitle">View Google Drive PDFs instantly in your browser</p>
+        </header>
+
+        <div class="input-section">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="pdfUrl" 
+                    class="url-input" 
+                    placeholder="Paste your Google Drive PDF link here (https://drive.google.com/file/d/.../view)"
+                    autocomplete="off"
+                >
+                <button id="loadBtn" class="btn btn-primary">Load PDF</button>
+                <button id="clearBtn" class="btn btn-secondary">Clear</button>
+            </div>
+        </div>
+
+        <div id="message" class="hidden"></div>
+
+        <div id="controls" class="controls hidden">
+            <div class="control-group">
+                <button id="prevBtn" class="control-btn" title="Previous Page">‹</button>
+                <span id="pageInfo" class="page-info">Page 1 of 1</span>
+                <button id="nextBtn" class="control-btn" title="Next Page">›</button>
+            </div>
+            <div class="control-group">
+                <button id="zoomOutBtn" class="control-btn" title="Zoom Out">-</button>
+                <span id="zoomInfo" class="page-info">100%</span>
+                <button id="zoomInBtn" class="control-btn" title="Zoom In">+</button>
+            </div>
+        </div>
+
+        <div id="viewerContainer" class="viewer-container hidden">
+            <div id="pdfContainer" class="pdf-container">
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <span>Loading PDF...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        class PDFViewer {
+            constructor() {
+                this.pdf = null;
+                this.currentPage = 1;
+                this.totalPages = 0;
+                this.scale = 1.2;
+                this.maxScale = 3.0;
+                this.minScale = 0.5;
+                this.scaleStep = 0.2;
+                
+                this.initializeElements();
+                this.bindEvents();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    urlInput: document.getElementById('pdfUrl'),
+                    loadBtn: document.getElementById('loadBtn'),
+                    clearBtn: document.getElementById('clearBtn'),
+                    prevBtn: document.getElementById('prevBtn'),
+                    nextBtn: document.getElementById('nextBtn'),
+                    zoomInBtn: document.getElementById('zoomInBtn'),
+                    zoomOutBtn: document.getElementById('zoomOutBtn'),
+                    pageInfo: document.getElementById('pageInfo'),
+                    zoomInfo: document.getElementById('zoomInfo'),
+                    controls: document.getElementById('controls'),
+                    viewerContainer: document.getElementById('viewerContainer'),
+                    pdfContainer: document.getElementById('pdfContainer'),
+                    loading: document.getElementById('loading'),
+                    message: document.getElementById('message')
+                };
+            }
+
+            bindEvents() {
+                this.elements.loadBtn.addEventListener('click', () => this.loadPDF());
+                this.elements.clearBtn.addEventListener('click', () => this.clearViewer());
+                this.elements.prevBtn.addEventListener('click', () => this.previousPage());
+                this.elements.nextBtn.addEventListener('click', () => this.nextPage());
+                this.elements.zoomInBtn.addEventListener('click', () => this.zoomIn());
+                this.elements.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                
+                this.elements.urlInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.loadPDF();
+                    }
+                });
+
+                this.elements.urlInput.addEventListener('paste', (e) => {
+                    setTimeout(() => this.validateUrl(), 100);
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (this.pdf) {
+                        switch(e.key) {
+                            case 'ArrowLeft':
+                            case 'ArrowUp':
+                                e.preventDefault();
+                                this.previousPage();
+                                break;
+                            case 'ArrowRight':
+                            case 'ArrowDown':
+                                e.preventDefault();
+                                this.nextPage();
+                                break;
+                            case '+':
+                            case '=':
+                                e.preventDefault();
+                                this.zoomIn();
+                                break;
+                            case '-':
+                                e.preventDefault();
+                                this.zoomOut();
+                                break;
+                        }
+                    }
+                });
+            }
+
+            validateUrl() {
+                const url = this.elements.urlInput.value.trim();
+                const isValidGoogleDriveUrl = /^https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/view/.test(url);
+                
+                if (url && !isValidGoogleDriveUrl) {
+                    this.showMessage('Please enter a valid Google Drive share link', 'error');
+                } else if (url && isValidGoogleDriveUrl) {
+                    this.hideMessage();
+                }
+            }
+
+            convertGoogleDriveUrl(url) {
+                const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+                if (match) {
+                    const fileId = match[1];
+                    return `https://drive.google.com/file/d/${fileId}/preview`;
+                }
+                return url;
+            }
+
+            showMessage(text, type = 'info') {
+                this.elements.message.textContent = text;
+                this.elements.message.className = type;
+                this.elements.message.classList.remove('hidden');
+                
+                if (type === 'success') {
+                    setTimeout(() => this.hideMessage(), 3000);
+                }
+            }
+
+            hideMessage() {
+                this.elements.message.classList.add('hidden');
+            }
+
+            showLoading() {
+                this.elements.loading.style.display = 'flex';
+                this.elements.pdfContainer.innerHTML = '';
+                this.elements.pdfContainer.appendChild(this.elements.loading);
+                this.elements.viewerContainer.classList.remove('hidden');
+            }
+
+            hideLoading() {
+                this.elements.loading.style.display = 'none';
+            }
+
+            async loadPDF() {
+                const url = this.elements.urlInput.value.trim();
+                
+                if (!url) {
+                    this.showMessage('Please enter a PDF URL', 'error');
+                    return;
+                }
+
+                const googleDriveRegex = /^https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/view/;
+                if (!googleDriveRegex.test(url)) {
+                    this.showMessage('Please enter a valid Google Drive share link (https://drive.google.com/file/d/.../view)', 'error');
+                    return;
+                }
+
+                this.showLoading();
+                this.hideMessage();
+                this.elements.loadBtn.disabled = true;
+                this.elements.loadBtn.textContent = 'Loading...';
+
+                try {
+                    const previewUrl = this.convertGoogleDriveUrl(url);
+                    this.showMessage(`Converting link and loading PDF...`, 'success');
+                    
+                    const loadingTask = pdfjsLib.getDocument(previewUrl);
+                    this.pdf = await loadingTask.promise;
+                    this.totalPages = this.pdf.numPages;
+                    this.currentPage = 1;
+                    
+                    this.hideLoading();
+                    this.elements.controls.classList.remove('hidden');
+                    
+                    await this.renderAllPages();
+                    this.updateControls();
+                    
+                    this.showMessage(`PDF loaded successfully! ${this.totalPages} pages`, 'success');
+                    
+                } catch (error) {
+                    console.error('Error loading PDF:', error);
+                    this.hideLoading();
+                    let errorMessage = 'Failed to load PDF. ';
+                    
+                    if (error.name === 'InvalidPDFException') {
+                        errorMessage += 'The file is not a valid PDF or is corrupted.';
+                    } else if (error.name === 'MissingPDFException') {
+                        errorMessage += 'The PDF file could not be found. Please check if the file exists and is publicly accessible.';
+                    } else if (error.name === 'UnexpectedResponseException') {
+                        errorMessage += 'Unable to access the PDF. Make sure the Google Drive link is set to "Anyone with the link can view".';
+                    } else {
+                        errorMessage += 'Please check if the Google Drive file is publicly accessible and try again.';
+                    }
+                    
+                    this.showMessage(errorMessage, 'error');
+                } finally {
+                    this.elements.loadBtn.disabled = false;
+                    this.elements.loadBtn.textContent = 'Load PDF';
+                }
+            }
+
+            async renderAllPages() {
+                this.elements.pdfContainer.innerHTML = '';
+                
+                for (let pageNum = 1; pageNum <= this.totalPages; pageNum++) {
+                    try {
+                        const page = await this.pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: this.scale });
+                        
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        canvas.id = `page-${pageNum}`;
+                        
+                        this.elements.pdfContainer.appendChild(canvas);
+                        
+                        const renderContext = {
+                            canvasContext: context,
+                            viewport: viewport
+                        };
+                        
+                        await page.render(renderContext).promise;
+                    } catch (error) {
+                        console.error(`Error rendering page ${pageNum}:`, error);
+                    }
+                }
+            }
+
+            async updateDisplay() {
+                if (!this.pdf) return;
+                
+                await this.renderAllPages();
+                this.updateControls();
+            }
+
+            updateControls() {
+                this.elements.pageInfo.textContent = `Page 1-${this.totalPages} of ${this.totalPages}`;
+                this.elements.zoomInfo.textContent = `${Math.round(this.scale * 100)}%`;
+                
+                this.elements.zoomInBtn.disabled = this.scale >= this.maxScale;
+                this.elements.zoomOutBtn.disabled = this.scale <= this.minScale;
+            }
+
+            previousPage() {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.scrollToPage(this.currentPage);
+                }
+            }
+
+            nextPage() {
+                if (this.currentPage < this.totalPages) {
+                    this.currentPage++;
+                    this.scrollToPage(this.currentPage);
+                }
+            }
+
+            scrollToPage(pageNum) {
+                const pageCanvas = document.getElementById(`page-${pageNum}`);
+                if (pageCanvas) {
+                    pageCanvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+
+            async zoomIn() {
+                if (this.scale < this.maxScale) {
+                    this.scale = Math.min(this.maxScale, this.scale + this.scaleStep);
+                    await this.updateDisplay();
+                }
+            }
+
+            async zoomOut() {
+                if (this.scale > this.minScale) {
+                    this.scale = Math.max(this.minScale, this.scale - this.scaleStep);
+                    await this.updateDisplay();
+                }
+            }
+
+            clearViewer() {
+                this.pdf = null;
+                this.currentPage = 1;
+                this.totalPages = 0;
+                this.scale = 1.2;
+                
+                this.elements.urlInput.value = '';
+                this.elements.pdfContainer.innerHTML = '';
+                this.elements.controls.classList.add('hidden');
+                this.elements.viewerContainer.classList.add('hidden');
+                this.hideMessage();
+                
+                this.elements.urlInput.focus();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new PDFViewer();
+        });
+    </script>
+</body>
+</html>
