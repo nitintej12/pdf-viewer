@@ -452,6 +452,51 @@
             box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4);
         }
 
+        /* TV Browser Focus and Navigation Styles */
+        .tv-focused {
+            outline: 3px solid #4f46e5 !important;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3) !important;
+            transform: scale(1.05) !important;
+            z-index: 1000;
+            position: relative;
+        }
+
+        .tv-navigation-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: none;
+            z-index: 10000;
+        }
+
+        .tv-navigation-hint.show {
+            display: block;
+        }
+
+        /* Make buttons more TV-friendly */
+        .btn, .control-btn {
+            min-height: 50px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:focus, .control-btn:focus, 
+        .upload-zone:focus, .url-input:focus {
+            outline: 3px solid #4f46e5;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+        }
+
         /* Upload Section Styles */
         .upload-section {
             margin-top: 20px;
@@ -566,6 +611,11 @@
         </div>
 
         <div id="message" class="hidden"></div>
+        
+        <!-- TV Navigation Hint -->
+        <div id="tvNavigationHint" class="tv-navigation-hint">
+            📺 Use arrow keys to navigate, Enter to select, Escape to exit fullscreen
+        </div>
 
         <div id="controls" class="controls hidden">
             <div class="control-group">
@@ -609,9 +659,12 @@
                 this.isTV = this.detectTVBrowser();
                 this.retryCount = 0;
                 this.maxRetries = 6;
+                this.currentFocusIndex = 0;
+                this.focusableElements = [];
                 
                 this.initializeElements();
                 this.bindEvents();
+                this.setupTVNavigation();
                 
                 console.log(`Browser detected: ${this.isTV ? 'TV Browser' : 'Desktop Browser'}`);
             }
@@ -650,23 +703,25 @@
                     viewerContainer: document.getElementById('viewerContainer'),
                     pdfContainer: document.getElementById('pdfContainer'),
                     loading: document.getElementById('loading'),
-                    message: document.getElementById('message')
+                    message: document.getElementById('message'),
+                    tvNavigationHint: document.getElementById('tvNavigationHint')
                 };
             }
 
             bindEvents() {
-                this.elements.loadBtn.addEventListener('click', () => this.loadPDF());
-                this.elements.clearBtn.addEventListener('click', () => this.clearViewer());
-                this.elements.uploadBtn.addEventListener('click', () => this.elements.fileInput.click());
+                // Multiple event types for TV browser compatibility
+                this.addMultipleEventListeners(this.elements.loadBtn, ['click', 'mousedown', 'touchstart'], () => this.loadPDF());
+                this.addMultipleEventListeners(this.elements.clearBtn, ['click', 'mousedown', 'touchstart'], () => this.clearViewer());
+                this.addMultipleEventListeners(this.elements.uploadBtn, ['click', 'mousedown', 'touchstart'], () => this.elements.fileInput.click());
                 this.elements.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
-                this.elements.prevBtn.addEventListener('click', () => this.previousPage());
-                this.elements.nextBtn.addEventListener('click', () => this.nextPage());
-                this.elements.zoomInBtn.addEventListener('click', () => this.zoomIn());
-                this.elements.zoomOutBtn.addEventListener('click', () => this.zoomOut());
-                this.elements.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+                this.addMultipleEventListeners(this.elements.prevBtn, ['click', 'mousedown', 'touchstart'], () => this.previousPage());
+                this.addMultipleEventListeners(this.elements.nextBtn, ['click', 'mousedown', 'touchstart'], () => this.nextPage());
+                this.addMultipleEventListeners(this.elements.zoomInBtn, ['click', 'mousedown', 'touchstart'], () => this.zoomIn());
+                this.addMultipleEventListeners(this.elements.zoomOutBtn, ['click', 'mousedown', 'touchstart'], () => this.zoomOut());
+                this.addMultipleEventListeners(this.elements.fullscreenBtn, ['click', 'mousedown', 'touchstart'], () => this.toggleFullscreen());
 
                 // Drag and drop functionality
-                this.elements.uploadZone.addEventListener('click', () => this.elements.fileInput.click());
+                this.addMultipleEventListeners(this.elements.uploadZone, ['click', 'mousedown', 'touchstart'], () => this.elements.fileInput.click());
                 this.elements.uploadZone.addEventListener('dragover', (e) => {
                     e.preventDefault();
                     this.elements.uploadZone.classList.add('dragover');
@@ -695,40 +750,203 @@
                     setTimeout(() => this.validateUrl(), 100);
                 });
 
-                document.addEventListener('keydown', (e) => {
-                    if (this.pdf) {
-                        switch(e.key) {
-                            case 'ArrowLeft':
-                            case 'ArrowUp':
-                                e.preventDefault();
-                                this.previousPage();
-                                break;
-                            case 'ArrowRight':
-                            case 'ArrowDown':
-                                e.preventDefault();
-                                this.nextPage();
-                                break;
-                            case '+':
-                            case '=':
-                                e.preventDefault();
-                                this.zoomIn();
-                                break;
-                            case '-':
-                                e.preventDefault();
-                                this.zoomOut();
-                                break;
-                        }
+                // TV Remote control support
+                document.addEventListener('keydown', (e) => this.handleTVRemoteControl(e));
+            }
+
+            addMultipleEventListeners(element, events, handler) {
+                events.forEach(event => {
+                    element.addEventListener(event, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log(`TV Browser: ${event} triggered on ${element.id || element.tagName}`);
+                        handler();
+                    }, { passive: false });
+                });
+            }
+
+            setupTVNavigation() {
+                if (this.isTV) {
+                    console.log('Setting up TV navigation...');
+                    this.elements.tvNavigationHint.classList.add('show');
+                    
+                    // Auto-hide hint after 5 seconds
+                    setTimeout(() => {
+                        this.elements.tvNavigationHint.classList.remove('show');
+                    }, 5000);
+                    
+                    this.updateFocusableElements();
+                    this.focusCurrentElement();
+                }
+            }
+
+            updateFocusableElements() {
+                this.focusableElements = [
+                    this.elements.urlInput,
+                    this.elements.loadBtn,
+                    this.elements.uploadBtn,
+                    this.elements.clearBtn,
+                    this.elements.uploadZone
+                ];
+
+                // Add PDF controls if visible
+                if (!this.elements.controls.classList.contains('hidden')) {
+                    this.focusableElements.push(
+                        this.elements.prevBtn,
+                        this.elements.nextBtn,
+                        this.elements.zoomOutBtn,
+                        this.elements.zoomInBtn,
+                        this.elements.fullscreenBtn
+                    );
+                }
+
+                // Make elements focusable
+                this.focusableElements.forEach((el, index) => {
+                    if (el) {
+                        el.tabIndex = 0;
+                        el.setAttribute('data-focus-index', index);
                     }
                 });
             }
 
-            validateUrl() {
-                const url = this.elements.urlInput.value.trim();
-                const isValidGoogleDriveUrl = /^https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/view/.test(url);
+            focusCurrentElement() {
+                if (this.focusableElements[this.currentFocusIndex]) {
+                    // Remove previous focus
+                    this.focusableElements.forEach(el => {
+                        if (el) el.classList.remove('tv-focused');
+                    });
+                    
+                    // Add current focus
+                    const currentElement = this.focusableElements[this.currentFocusIndex];
+                    currentElement.classList.add('tv-focused');
+                    currentElement.focus();
+                    
+                    console.log(`TV Focus: ${currentElement.id || currentElement.tagName} (${this.currentFocusIndex})`);
+                }
+            }
+
+            handleTVRemoteControl(e) {
+                console.log(`TV Remote: ${e.key} pressed`);
                 
-                if (url && !isValidGoogleDriveUrl) {
-                    this.showMessage('Please enter a valid Google Drive share link', 'error');
-                } else if (url && isValidGoogleDriveUrl) {
+                if (this.isTV) {
+                    // Show navigation hint temporarily
+                    this.elements.tvNavigationHint.classList.add('show');
+                    clearTimeout(this.hintTimeout);
+                    this.hintTimeout = setTimeout(() => {
+                        this.elements.tvNavigationHint.classList.remove('show');
+                    }, 3000);
+                }
+                
+                // Navigation keys
+                switch(e.key) {
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        if (this.pdf && this.isFullscreen) {
+                            this.previousPage();
+                        } else if (this.isTV) {
+                            this.navigateFocus(-1);
+                        }
+                        break;
+                        
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        if (this.pdf && this.isFullscreen) {
+                            this.nextPage();
+                        } else if (this.isTV) {
+                            this.navigateFocus(1);
+                        }
+                        break;
+                        
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        if (this.isTV && !this.isFullscreen) {
+                            this.navigateFocus(-1);
+                        }
+                        break;
+                        
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        if (this.isTV && !this.isFullscreen) {
+                            this.navigateFocus(1);
+                        }
+                        break;
+                        
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault();
+                        if (this.isTV && this.focusableElements[this.currentFocusIndex]) {
+                            this.activateCurrentElement();
+                        }
+                        break;
+                        
+                    case 'Escape':
+                        e.preventDefault();
+                        if (this.isFullscreen) {
+                            this.exitFullscreen();
+                        }
+                        break;
+                        
+                    case '+':
+                    case '=':
+                        if (this.pdf) {
+                            e.preventDefault();
+                            this.zoomIn();
+                        }
+                        break;
+                        
+                    case '-':
+                        if (this.pdf) {
+                            e.preventDefault();
+                            this.zoomOut();
+                        }
+                        break;
+                }
+            }
+
+            navigateFocus(direction) {
+                this.currentFocusIndex += direction;
+                
+                if (this.currentFocusIndex < 0) {
+                    this.currentFocusIndex = this.focusableElements.length - 1;
+                } else if (this.currentFocusIndex >= this.focusableElements.length) {
+                    this.currentFocusIndex = 0;
+                }
+                
+                this.focusCurrentElement();
+            }
+
+            activateCurrentElement() {
+                const element = this.focusableElements[this.currentFocusIndex];
+                if (!element) return;
+                
+                console.log(`TV Remote: Activating ${element.id || element.tagName}`);
+                
+                // Trigger appropriate action
+                if (element === this.elements.loadBtn) {
+                    this.loadPDF();
+                } else if (element === this.elements.clearBtn) {
+                    this.clearViewer();
+                } else if (element === this.elements.uploadBtn || element === this.elements.uploadZone) {
+                    this.elements.fileInput.click();
+                } else if (element === this.elements.prevBtn) {
+                    this.previousPage();
+                } else if (element === this.elements.nextBtn) {
+                    this.nextPage();
+                } else if (element === this.elements.zoomInBtn) {
+                    this.zoomIn();
+                } else if (element === this.elements.zoomOutBtn) {
+                    this.zoomOut();
+                } else if (element === this.elements.fullscreenBtn) {
+                    this.toggleFullscreen();
+                } else {
+                    element.click();
+                }
+            }
+
+            validateUrl() {
+                // Simplified URL validation for any PDF URL
+                const url = this.elements.urlInput.value.trim();
+                if (url && url.includes('http')) {
                     this.hideMessage();
                 }
             }
@@ -934,6 +1152,11 @@
                 
                 this.hideLoading();
                 this.elements.controls.classList.remove('hidden');
+                
+                // Update TV navigation after controls are shown
+                if (this.isTV) {
+                    this.updateFocusableElements();
+                }
                 
                 await this.renderAllPages();
                 this.updateControls();
